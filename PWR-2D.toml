@@ -39,12 +39,12 @@ nf2 = 0.000
 s12 = 0.04
 
 [geometry]
-lx = 170.0
-ly = 170.0
-gx = 10.0
-gy = 10.0
-nx = 17
-ny = 17
+length_x = 170.0
+length_y = 170.0
+geo_length_x = 10.0
+geo_length_y = 10.0
+geo_num_x = 17
+geo_num_y = 17
 # (row, col) -> (i, j) -> (x, y)
 content = """
 3 2 2 2 2 2 2 3 3 2 2 2 2 1 1 4 4
