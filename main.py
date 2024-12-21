@@ -1,23 +1,56 @@
-'''
-使用数值计算方法解决反应堆中子扩散问题
+"""
+该程序用于求解中子扩散方程，计算反应堆中的中子通量和有效增殖因子。
 
-    ∂φ(x,t)/∂t = D∇²φ(x,t) - Σaφ(x,t) + S(x,t)
+主要步骤包括：
+1. 读取参数：从配置文件中读取几何、材料和边界条件等参数。
+2. 数值计算：
+    a. 曲率修正：根据材料属性和几何信息，修正扩散系数和吸收系数。
+    b. 生成矩阵：生成拉普拉斯矩阵的稀疏表示，处理边界条件。
+    c. 线性算子：定义矩阵 A 和 B 的线性算子，用于求解线性方程组。
+    d. 源迭代：通过源迭代方法，更新中子通量和有效增殖因子。
+3. 做图：绘制中子通量和有效增殖因子的图像，并保存结果。
 
-其中:
-    φ(x,t) 为中子通量密度
-    D 为中子扩散系数
-    Σa 为吸收截面
-    S(x,t) 为源项
+主要函数和类：
+- in_rect(x_, y_, x_start, y_start, x_length, y_length): 判断是否位于反应堆内。
+- outside(x_, y_): 判断是否在矩形区域外或者在矩形区域内但材料为0。
+- gen_laplacian(): 生成拉普拉斯矩阵的稀疏表示。
+- mat_A(phi_): 计算矩阵 A 乘以向量 phi_ 的结果。
+- mat_B(phi_): 计算矩阵 B 乘以向量 phi_ 的结果。
+- step(phi_, keff_): 执行一步源迭代，更新中子通量和有效增殖因子。
+- plot_phi(phi_): 绘制中子通量的图像。
+- plot_keff(): 绘制有效增殖因子的图像。
 
-边界条件:
+变量：
+- refine: 网格细化倍数。
+- config: 配置文件路径。
+- predir: 结果保存目录。
+- length_x, length_y: 几何尺寸。
+- mesh_num_x, mesh_num_y: 网格数量。
+- mesh_length_x, mesh_length_y: 网格尺寸。
+- x, y: 网格中心坐标。
+- keff_ref: 参考有效增殖因子。
+- material: 材料属性列表。
+- D1, D2: 扩散系数数组。
+- a1, a2: 吸收系数数组。
+- nf1, nf2: 中子产额数组。
+- s12: 散射系数数组。
+- geo_length_x, geo_length_y: 几何尺寸。
+- geo_num_x, geo_num_y: 几何网格数量。
+- content: 几何内容数组。
+- ext_dist: 边界条件扩展距离。
+- Bz2: 材料属性中的 Bz 平方。
+- lap: 拉普拉斯矩阵。
+- phi: 中子通量数组。
+- keff: 有效增殖因子。
+- keff_his: 有效增殖因子历史记录。
+- xarr, yarr: 绘图坐标数组。
 
-    1) 真空边界条件:
-        -D∇φ·n = 0, φ = 0
-    2) 反射边界条件:
-        -D∇φ·n = 0, ∂φ/∂n = 0
-
-反应堆几何模型: 矩形堆芯
-'''
+输出文件：
+- phi.npy: 中子通量数组。
+- keff.npy: 有效增殖因子历史记录数组。
+- phi.png: 中子通量图像。
+- keff.png: 有效增殖因子图像。
+"""
 
 import os
 import argparse
@@ -103,18 +136,52 @@ for i_ in range(mesh_num_x):
 #### PART II b 生成矩阵 ####
 
 def gen_laplacian():
-    '''生成laplacian矩阵'''
+    '''
+    生成拉普拉斯矩阵。
+
+    该函数为给定的网格生成拉普拉斯矩阵的稀疏表示。
+    它处理边界条件并相应地更新矩阵。
+
+    返回:
+        scipy.sparse.csr_matrix: 生成的拉普拉斯矩阵，采用压缩稀疏行(CSR)格式。
+    '''
     @numba.jit(nopython=True)
     def idx_A(i, j):
-        '''doc'''
+        '''
+        计算二维网格在一维数组表示中的索引。
+
+        parameters:
+            i (int): 行索引。
+            j (int): 列索引。
+
+        returns:
+            int: 对应于二维网格中 (i, j) 位置的一维数组中的索引。
+        '''
         return i+j*mesh_num_x
     @numba.jit(nopython=True)
     def idx_B(i, j):
-        '''doc'''
+        '''
+        计算给定索引 i 和 j 的索引 B。
+
+        parameters:
+            i (int): 行索引。
+            j (int): 列索引。
+
+        returns:
+            int: 计算得到的索引 B。
+        '''
         return idx_A(i, j)+mesh_num_x*mesh_num_y
     @numba.jit(nopython=True)
     def gen_sub():
-        '''doc'''
+        '''
+        生成一个满的拉普拉斯矩阵(-DΔ(u,v))，以三元组列表的形式返回。
+        该函数为给定的网格生成拉普拉斯矩阵的稀疏表示。
+        它处理边界条件并相应地更新矩阵。
+
+        returns:
+            list of tuple: 表示拉普拉斯矩阵非零条目的三元组列表。
+                   每个三元组的形式为 (行索引, 列索引, 值)。
+        '''
         # 生成一个满的拉普拉斯矩阵(-DΔ(u,v))
         triple_A = []
         for i in range(mesh_num_x):
@@ -229,14 +296,14 @@ lap = gen_laplacian()
 
 # linearoperator
 def mat_A(phi_):
-    '''doc'''
+    '''计算矩阵 A 乘以向量 phi_ 的结果'''
     res = lap*phi_
     res[:mesh_num_x*mesh_num_y] += (a1+s12)*phi_[:mesh_num_x*mesh_num_y]
     res[mesh_num_x*mesh_num_y:] += a2*phi_[mesh_num_x*mesh_num_y:]-s12*phi_[:mesh_num_x*mesh_num_y]
     return res
 A = LinearOperator((mesh_num_x*mesh_num_y*2, mesh_num_x*mesh_num_y*2), mat_A)
 def mat_B(phi_):
-    '''doc'''
+    '''计算矩阵 B 乘以向量 phi_ 的结果'''
     res = np.zeros(mesh_num_x*mesh_num_y*2)
     res[:mesh_num_x*mesh_num_y] = nf1*phi_[:mesh_num_x*mesh_num_y]+nf2*phi_[mesh_num_x*mesh_num_y:]
     return res
@@ -251,7 +318,7 @@ keff = 1
 keff_his = []
 
 def step(phi_, keff_):
-    '''doc'''
+    '''执行一步源迭代，更新中子通量和有效增殖因子'''
     nxt_phi, _ = gmres(A, B*phi_/keff_)
     keff_ = keff_ * np.sum(B*nxt_phi) / (np.sum(B*phi_))
     return nxt_phi, keff_
