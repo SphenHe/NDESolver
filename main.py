@@ -208,26 +208,16 @@ def gen_laplacian():
                             ) if not outside(x[i]+mesh_length_x, y[j]) else D1[idx_A(i, j)]
 
                 # ∂n=0
-                if i==0:
-                    lef = 0
-                if j==0:
-                    bot = 0
+                if i==0: lef = 0
+                if j==0: bot = 0
                 # phi=0
-                if outside(x[i]+mesh_length_x, y[j]):
-                    rig = 0
-                    val_rig = mesh_length_x/(mesh_length_x/2+d)
-                if outside(x[i], y[j]+mesh_length_y):
-                    top = 0
-                    val_up = mesh_length_y/(mesh_length_y/2+d)
+                if outside(x[i]+mesh_length_x, y[j]): rig = 0; val_rig = mesh_length_x/(mesh_length_x/2+d)
+                if outside(x[i], y[j]+mesh_length_y): top = 0; val_up = mesh_length_y/(mesh_length_y/2+d)
                 # update triple
-                if top != 0:
-                    triple_A.append((idx_A(i, j), idx_A(i, j+1), top*D1_top/(mesh_length_y**2)))
-                if bot != 0:
-                    triple_A.append((idx_A(i, j), idx_A(i, j-1), bot*D1_bot/(mesh_length_y**2)))
-                if lef != 0:
-                    triple_A.append((idx_A(i, j), idx_A(i-1, j), lef*D1_lef/(mesh_length_x**2)))
-                if rig != 0:
-                    triple_A.append((idx_A(i, j), idx_A(i+1, j), rig*D1_rig/(mesh_length_x**2)))
+                if top != 0: triple_A.append((idx_A(i, j), idx_A(i, j+1), top*D1_top/(mesh_length_y**2)))
+                if bot != 0: triple_A.append((idx_A(i, j), idx_A(i, j-1), bot*D1_bot/(mesh_length_y**2)))
+                if lef != 0: triple_A.append((idx_A(i, j), idx_A(i-1, j), lef*D1_lef/(mesh_length_x**2)))
+                if rig != 0: triple_A.append((idx_A(i, j), idx_A(i+1, j), rig*D1_rig/(mesh_length_x**2)))
 
                 temp += val_up*D1_top/(mesh_length_y**2)
                 temp += D1_bot/(mesh_length_y**2) if bot != 0 else 0
@@ -250,26 +240,16 @@ def gen_laplacian():
                 D2_rig = 2/(1/D2[idx_A(i, j)] + 1/D2[idx_A(i+1, j)]
                             ) if not outside(x[i]+mesh_length_x, y[j]) else D2[idx_A(i, j)]
                 # ∂n=0
-                if i==0:
-                    lef = 0
-                if j==0:
-                    bot = 0
+                if i==0: lef = 0
+                if j==0: bot = 0
                 # phi=0
-                if outside(x[i]+mesh_length_x, y[j]):
-                    rig = 0
-                    val_rig = mesh_length_x/(mesh_length_x/2+d)
-                if outside(x[i], y[j]+mesh_length_y):
-                    top = 0
-                    val_up = mesh_length_y/(mesh_length_y/2+d)
+                if outside(x[i]+mesh_length_x, y[j]): rig = 0; val_rig = mesh_length_x/(mesh_length_x/2+d)
+                if outside(x[i], y[j]+mesh_length_y): top = 0; val_up = mesh_length_y/(mesh_length_y/2+d)
                 # update triple
-                if top != 0:
-                    triple_A.append((idx_B(i, j), idx_B(i, j+1), top*D2_top/(mesh_length_y**2)))
-                if bot != 0:
-                    triple_A.append((idx_B(i, j), idx_B(i, j-1), bot*D2_bot/(mesh_length_y**2)))
-                if lef != 0:
-                    triple_A.append((idx_B(i, j), idx_B(i-1, j), lef*D2_lef/(mesh_length_x**2)))
-                if rig != 0:
-                    triple_A.append((idx_B(i, j), idx_B(i+1, j), rig*D2_rig/(mesh_length_x**2)))
+                if top != 0: triple_A.append((idx_B(i, j), idx_B(i, j+1), top*D2_top/(mesh_length_y**2)))
+                if bot != 0: triple_A.append((idx_B(i, j), idx_B(i, j-1), bot*D2_bot/(mesh_length_y**2)))
+                if lef != 0: triple_A.append((idx_B(i, j), idx_B(i-1, j), lef*D2_lef/(mesh_length_x**2)))
+                if rig != 0: triple_A.append((idx_B(i, j), idx_B(i+1, j), rig*D2_rig/(mesh_length_x**2)))
 
                 temp += val_up*D2_top/(mesh_length_y**2)
                 temp += D2_bot/(mesh_length_y**2) if bot != 0 else 0
