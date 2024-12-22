@@ -42,12 +42,12 @@
 - lap: 拉普拉斯矩阵。
 - phi: 中子通量数组。
 - keff: 有效增殖因子。
-- keff_his: 有效增殖因子历史记录。
+- keff_data: 有效增殖因子历史记录。
 - xarr, yarr: 绘图坐标数组。
 
 输出文件：
-- phi.npy: 中子通量数组。
-- keff.npy: 有效增殖因子历史记录数组。
+- phi.data: 中子通量数组。
+- keff.data: 有效增殖因子历史记录数组。
 - phi.png: 中子通量图像。
 - keff.png: 有效增殖因子图像。
 """
@@ -62,48 +62,56 @@ from scipy.sparse.linalg import LinearOperator
 from scipy.sparse.linalg import tfqmr
 from scipy.sparse import csr_matrix
 
-###### PART I 读取参数 ######
+def plot_phi(phi_):
+    '''画出 phi 的图像'''
+    # xarr = [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 160, 170]
+    xarr = [i*10 for i in range(18)]
+    yarr = xarr
+    fig, ax = plt.subplots(1, 2, figsize=(12, 6))
+    phi1 = phi_[:mesh_num_x*mesh_num_y]
+    phi2 = phi_[mesh_num_x*mesh_num_y:]
+    phi1 = phi1.reshape(mesh_num_y, mesh_num_x)
+    phi2 = phi2.reshape(mesh_num_y, mesh_num_x)
+    phi1max = np.max(np.abs(phi1))
+    im = ax[0].imshow(phi1, cmap='coolwarm', vmin=0, vmax=phi1max, origin='lower',
+                      extent=(0, length_x, 0, length_y))
+    fig.colorbar(im, ax=ax[0], orientation='vertical', fraction=0.046, pad=0.04)
+    ax[0].set_title("$\\phi_1$ Neutron Flux")
+    ax[0].grid(True, which='both', linestyle='--', linewidth=0.5, color='white')
+    ax[0].set_xticks(xarr)
+    ax[0].set_yticks(yarr)
+    phi2max = np.max(np.abs(phi2))
+    im = ax[1].imshow(phi2, cmap='coolwarm', vmin=0, vmax=phi2max,
+                      extent=(0, length_x, 0, length_y), origin='lower')
+    fig.colorbar(im, ax=ax[1], orientation='vertical', fraction=0.046, pad=0.04)
+    ax[1].set_title("$\\phi_2$ Neutron Flux")
+    ax[1].grid(True, which='both', linestyle='--', linewidth=0.5, color='white')
+    ax[1].set_xticks(xarr)
+    ax[1].set_yticks(yarr)
+    plt.tight_layout()
+    plt.savefig(f'{predir}/phi.pdf')
+    plt.close()
 
-parser = argparse.ArgumentParser()
-parser.add_argument("--refine", type=int, default=1)
-parser.add_argument("--config", type=str, default="config.toml")
-args = parser.parse_args()
-refine = args.refine
-config = args.config
-if not os.path.exists(config):
-    raise FileNotFoundError(f"config file {config} not found")
-with open(config, "rb") as f:
-    config = tomli.load(f)
-
-predir = f"{config['title']}-{refine}"
-os.makedirs(predir, exist_ok=True)
-
-length_x = config["geometry"]["length_x"]
-length_y = config["geometry"]["length_y"]
-mesh_num_x = config["geometry"]["geo_num_x"]*refine
-mesh_num_y = config["geometry"]["geo_num_y"]*refine
-mesh_length_x = length_x/mesh_num_x
-mesh_length_y = length_y/mesh_num_y
-x = np.array([ (i+0.5)*mesh_length_x for i in range(mesh_num_x) ])
-y = np.array([ (j+0.5)*mesh_length_y for j in range(mesh_num_y) ])
-
-keff_ref = config["solution"]["k_eff"]
-
-material = [{}]
-for i_ in range(config["material"]["total"]):
-    material.append(config["material"][f"mat_{i_+1}"])
-D1, D2 = np.zeros(mesh_num_x*mesh_num_y), np.zeros(mesh_num_x*mesh_num_y)
-a1, a2 = np.zeros(mesh_num_x*mesh_num_y), np.zeros(mesh_num_x*mesh_num_y)
-nf1, nf2 = np.zeros(mesh_num_x*mesh_num_y), np.zeros(mesh_num_x*mesh_num_y)
-s12 = np.zeros(mesh_num_x*mesh_num_y)
-geo_length_x, geo_length_y = config["geometry"]["geo_length_x"], config["geometry"]["geo_length_y"]
-geo_num_x, geo_num_y = config["geometry"]["geo_num_x"], config["geometry"]["geo_num_y"]
-content = np.fromstring(
-    config["geometry"]["content"], dtype=int, sep="\n"
-    ).reshape(geo_num_x, geo_num_y)
-ext_dist = config["boundary"]["ext_dist"]
-
-###### PART II 数值计算 ######
+def plot_keff():
+    '''画出 keff 的图像'''
+    _fig, ax = plt.subplots(1, 2, figsize=(12, 6))
+    ax[0].plot(keff_data, label='$k_{eff}$='+f"{keff_data[-1]:.6f}")
+    ax[0].plot([0, len(keff_data)], [keff_ref, keff_ref], 'r--', label="$k_{eff,ref}=$"f'{keff_ref}')
+    ax[0].plot([0, len(keff_data)], [keff, keff], 'g--', label="$k_{eff,final}$="f'{keff:.6f}')
+    ax[0].set_xlabel('Iteration')
+    ax[0].set_ylabel('keff')
+    ax[0].set_title('Effective Multiplication Factor')
+    ax[0].grid(True, which='both', linestyle='--', linewidth=0.5)
+    ax[0].legend()
+    ax[1].plot(np.abs(keff_data-keff_ref)/keff_ref, label='Relative error')
+    ax[1].set_xlabel('Iteration')
+    ax[1].set_ylabel('Relative error of keff')
+    ax[1].set_yscale('log')
+    ax[1].set_title('Relative Error of Effective Multiplication Factor')
+    ax[1].grid(True, which='both', linestyle='--', linewidth=0.5)
+    plt.tight_layout()
+    plt.savefig(f'{predir}/keff.pdf')
+    plt.close()
 
 @numba.jit(nopython=True)
 def in_rect(x_, y_, x_start, y_start, x_length, y_length):
@@ -116,23 +124,25 @@ def outside(x_, y_):
     return (not in_rect(x_, y_, 0, 0, length_x, length_y)) \
         or (content[int(x_//geo_length_x), int(y_//geo_length_y)] == 0)
 
-#### PART II a 曲率修正 ####
-Bz2 = config["material"]["Bz_sqr"]
-for i_ in range(mesh_num_x):
-    for j_ in range(mesh_num_y):
-        xx, yy = x[i_], y[j_]
-        if outside(xx, yy):
-            continue
-        mymat = material[content[int(xx//geo_length_x), int(yy//geo_length_y)]]
-        idx = i_ + j_*mesh_num_x
-        D1[idx], D2[idx] = mymat["d1"], mymat["d2"]
-        a1[idx], a2[idx] = mymat["a1"], mymat["a2"]
-        nf1[idx], nf2[idx] = mymat["nf1"], mymat["nf2"]
-        s12[idx] = mymat["s12"]
-        a1[idx] += D1[idx]*Bz2
-        a2[idx] += D2[idx]*Bz2
+def mat_A(phi_):
+    '''计算矩阵 A 乘以向量 phi_ 的结果'''
+    res = lap*phi_
+    res[:mesh_num_x*mesh_num_y] += (a1+s12)*phi_[:mesh_num_x*mesh_num_y]
+    res[mesh_num_x*mesh_num_y:] += a2*phi_[mesh_num_x*mesh_num_y:]-s12*phi_[:mesh_num_x*mesh_num_y]
+    return res
+def mat_B(phi_):
+    '''计算矩阵 B 乘以向量 phi_ 的结果'''
+    res = np.zeros(mesh_num_x*mesh_num_y*2)
+    res[:mesh_num_x*mesh_num_y] = nf1*phi_[:mesh_num_x*mesh_num_y]+nf2*phi_[mesh_num_x*mesh_num_y:]
+    return res
 
-#### PART II b 生成矩阵 ####
+def step(phi_, keff_):
+    '''执行一步源迭代，更新中子通量和有效增殖因子'''
+    nxt_phi, info = tfqmr(A, B*phi_/keff_)
+    if info != 0:
+        raise RuntimeError(f"TFQMR did not converge, info={info}")
+    keff_ = keff_ * np.sum(B*nxt_phi) / (np.sum(B*phi_))
+    return nxt_phi, keff_
 
 def gen_laplacian():
     '''
@@ -265,6 +275,68 @@ def gen_laplacian():
     A_ = csr_matrix((val, (row, col)), shape=(mesh_num_x*mesh_num_y*2, mesh_num_x*mesh_num_y*2))
     return A_
 
+###### PART I 读取参数 ######
+parser = argparse.ArgumentParser()
+parser.add_argument("--refine", type=int, default=1)
+parser.add_argument("--config", type=str, default="config.toml")
+args = parser.parse_args()
+refine = args.refine
+config = args.config
+if not os.path.exists(config):
+    raise FileNotFoundError(f"config file {config} not found")
+with open(config, "rb") as f:
+    config = tomli.load(f)
+
+predir = f"{config['title']}-{refine}"
+os.makedirs(predir, exist_ok=True)
+
+length_x = config["geometry"]["length_x"]
+length_y = config["geometry"]["length_y"]
+mesh_num_x = config["geometry"]["geo_num_x"]*refine
+mesh_num_y = config["geometry"]["geo_num_y"]*refine
+mesh_length_x = length_x/mesh_num_x
+mesh_length_y = length_y/mesh_num_y
+x = np.array(object=[ (i+0.5)*mesh_length_x for i in range(mesh_num_x) ])
+y = np.array([ (j+0.5)*mesh_length_y for j in range(mesh_num_y) ])
+
+keff_ref = config["solution"]["k_eff"]
+
+material = [{}]
+for i_ in range(config["material"]["total"]):
+    material.append(config["material"][f"mat_{i_+1}"])
+geo_length_x, geo_length_y = config["geometry"]["geo_length_x"], config["geometry"]["geo_length_y"]
+geo_num_x, geo_num_y = config["geometry"]["geo_num_x"], config["geometry"]["geo_num_y"]
+content = np.fromstring(
+    config["geometry"]["content"], dtype=int, sep="\n"
+    ).reshape(geo_num_x, geo_num_y)
+ext_dist = config["boundary"]["ext_dist"]
+
+###### PART II 数值计算 ######
+
+#### PART II a 曲率修正 ####
+
+D1, D2 = np.zeros(mesh_num_x*mesh_num_y), np.zeros(mesh_num_x*mesh_num_y)
+a1, a2 = np.zeros(mesh_num_x*mesh_num_y), np.zeros(mesh_num_x*mesh_num_y)
+nf1, nf2 = np.zeros(mesh_num_x*mesh_num_y), np.zeros(mesh_num_x*mesh_num_y)
+s12 = np.zeros(mesh_num_x*mesh_num_y)
+
+Bz2 = config["material"]["Bz_sqr"]
+for i_ in range(mesh_num_x):
+    for j_ in range(mesh_num_y):
+        xx, yy = x[i_], y[j_]
+        if outside(xx, yy):
+            continue
+        mymat = material[content[int(xx//geo_length_x), int(yy//geo_length_y)]]
+        idx = i_ + j_*mesh_num_x
+        D1[idx], D2[idx] = mymat["d1"], mymat["d2"]
+        a1[idx], a2[idx] = mymat["a1"], mymat["a2"]
+        nf1[idx], nf2[idx] = mymat["nf1"], mymat["nf2"]
+        s12[idx] = mymat["s12"]
+        a1[idx] += D1[idx]*Bz2
+        a2[idx] += D2[idx]*Bz2
+
+#### PART II b 生成矩阵 ####
+
 lap = gen_laplacian()
 
 #### PART II c 线性算子 ####
@@ -273,95 +345,27 @@ lap = gen_laplacian()
 # -D2Δv + (∑a2) v = ∑1→2 u
 
 # linearoperator
-def mat_A(phi_):
-    '''计算矩阵 A 乘以向量 phi_ 的结果'''
-    res = lap*phi_
-    res[:mesh_num_x*mesh_num_y] += (a1+s12)*phi_[:mesh_num_x*mesh_num_y]
-    res[mesh_num_x*mesh_num_y:] += a2*phi_[mesh_num_x*mesh_num_y:]-s12*phi_[:mesh_num_x*mesh_num_y]
-    return res
-A = LinearOperator((mesh_num_x*mesh_num_y*2, mesh_num_x*mesh_num_y*2), mat_A)
-def mat_B(phi_):
-    '''计算矩阵 B 乘以向量 phi_ 的结果'''
-    res = np.zeros(mesh_num_x*mesh_num_y*2)
-    res[:mesh_num_x*mesh_num_y] = nf1*phi_[:mesh_num_x*mesh_num_y]+nf2*phi_[mesh_num_x*mesh_num_y:]
-    return res
-B = LinearOperator((mesh_num_x*mesh_num_y*2, mesh_num_x*mesh_num_y*2), mat_B)
 
+A = LinearOperator((mesh_num_x*mesh_num_y*2, mesh_num_x*mesh_num_y*2), mat_A)
+B = LinearOperator((mesh_num_x*mesh_num_y*2, mesh_num_x*mesh_num_y*2), mat_B)
 
 #### PART II d 源迭代 ####
 
 phi = np.ones(mesh_num_x*mesh_num_y*2)
 phi /= np.sqrt(np.sum(phi**2))
 keff = 1
-keff_his = []
+keff_data = []
 
-def step(phi_, keff_):
-    '''执行一步源迭代，更新中子通量和有效增殖因子'''
-    nxt_phi, info = tfqmr(A, B*phi_/keff_)
-    if info != 0:
-        raise RuntimeError(f"TFQMR did not converge, info={info}")
-    keff_ = keff_ * np.sum(B*nxt_phi) / (np.sum(B*phi_))
-    return nxt_phi, keff_
 for i_ in range(50):
     phi, keff = step(phi, keff)
-    keff_his.append(keff)
+    keff_data.append(keff)
     print(f"iter {i_}, {keff=:.5f}")
 print(f"finish: {keff=:.5f}")
 
-np.save(f'{predir}/phi.npy', phi)
-keff_his = np.array(keff_his)
-np.save(f'{predir}/keff.npy', keff_his)
+np.save(f'{predir}/phi.data', phi)
+keff_data = np.array(keff_data)
+np.save(f'{predir}/keff.data', keff_data)
 
 ###### PART III 做图 ######
-# xarr = [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 160, 170]
-xarr = [i*10 for i in range(18)]
-yarr = xarr
-def plot_phi(phi_):
-    '''画出 phi 的图像'''
-    fig, ax = plt.subplots(1, 2, figsize=(12, 6))
-    phi1 = phi_[:mesh_num_x*mesh_num_y]
-    phi2 = phi_[mesh_num_x*mesh_num_y:]
-    phi1 = phi1.reshape(mesh_num_y, mesh_num_x)
-    phi2 = phi2.reshape(mesh_num_y, mesh_num_x)
-    phi1max = np.max(np.abs(phi1))
-    im = ax[0].imshow(phi1, cmap='coolwarm', vmin=0, vmax=phi1max, origin='lower',
-                      extent=(0, length_x, 0, length_y))
-    fig.colorbar(im, ax=ax[0], orientation='vertical', fraction=0.046, pad=0.04)
-    ax[0].set_title("$\\phi_1$ Neutron Flux")
-    ax[0].grid(True, which='both', linestyle='--', linewidth=0.5, color='white')
-    ax[0].set_xticks(xarr)
-    ax[0].set_yticks(yarr)
-    phi2max = np.max(np.abs(phi2))
-    im = ax[1].imshow(phi2, cmap='coolwarm', vmin=0, vmax=phi2max,
-                      extent=(0, length_x, 0, length_y), origin='lower')
-    fig.colorbar(im, ax=ax[1], orientation='vertical', fraction=0.046, pad=0.04)
-    ax[1].set_title("$\\phi_2$ Neutron Flux")
-    ax[1].grid(True, which='both', linestyle='--', linewidth=0.5, color='white')
-    ax[1].set_xticks(xarr)
-    ax[1].set_yticks(yarr)
-    plt.tight_layout()
-    plt.savefig(f'{predir}/phi.pdf')
-    plt.close()
 plot_phi(phi)
-
-def plot_keff():
-    '''画出 keff 的图像'''
-    _fig, ax = plt.subplots(1, 2, figsize=(12, 6))
-    ax[0].plot(keff_his, label='$k_{eff}$='+f"{keff_his[-1]:.5f}")
-    ax[0].plot([0, len(keff_his)], [keff_ref, keff_ref], 'r--', label="$k_{eff,ref}=$"f'{keff_ref}')
-    ax[0].set_xlabel('Iteration')
-    ax[0].set_ylabel('keff')
-    ax[0].set_title('Effective Multiplication Factor')
-    ax[0].grid(True, which='both', linestyle='--', linewidth=0.5)
-    ax[0].legend()
-    ax[1].plot(np.abs(keff_his-keff_ref)/keff_ref, label='Relative error')
-    ax[1].set_xlabel('Iteration')
-    ax[1].set_ylabel('Relative error of keff')
-    ax[1].set_yscale('log')
-    ax[1].set_title('Relative Error of Effective Multiplication Factor')
-    ax[1].grid(True, which='both', linestyle='--', linewidth=0.5)
-    plt.tight_layout()
-    plt.savefig(f'{predir}/keff.pdf')
-    plt.close()
-
 plot_keff()
