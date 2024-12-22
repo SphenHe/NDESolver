@@ -105,8 +105,6 @@ ext_dist = config["boundary"]["ext_dist"]
 
 ###### PART II 数值计算 ######
 
-#### PART II a 曲率修正 ####
-
 @numba.jit(nopython=True)
 def in_rect(x_, y_, x_start, y_start, x_length, y_length):
     '''判断是否位于反应堆内'''
@@ -118,6 +116,7 @@ def outside(x_, y_):
     return (not in_rect(x_, y_, 0, 0, length_x, length_y)) \
         or (content[int(x_//geo_length_x), int(y_//geo_length_y)] == 0)
 
+#### PART II a 曲率修正 ####
 Bz2 = config["material"]["Bz_sqr"]
 for i_ in range(mesh_num_x):
     for j_ in range(mesh_num_y):
@@ -182,7 +181,6 @@ def gen_laplacian():
             list of tuple: 表示拉普拉斯矩阵非零条目的三元组列表。
                    每个三元组的形式为 (行索引, 列索引, 值)。
         '''
-        # 生成一个满的拉普拉斯矩阵(-DΔ(u,v))
         triple_A = []
         for i in range(mesh_num_x):
             for j in range(mesh_num_y):
@@ -192,8 +190,8 @@ def gen_laplacian():
                     triple_A.append((idx_B(i, j), idx_B(i, j), 1))
                     continue
 
-                # 1) 设置phi1
-                temp = 0
+                # 设置phi1
+                tmp = 0
                 top, bot, lef, rig  = -1, -1, -1, -1
                 val_up, val_rig = 1, 1
                 d = D1[idx_A(i, j)] * ext_dist
@@ -219,14 +217,14 @@ def gen_laplacian():
                 if lef != 0: triple_A.append((idx_A(i, j), idx_A(i-1, j), lef*D1_lef/(mesh_length_x**2)))
                 if rig != 0: triple_A.append((idx_A(i, j), idx_A(i+1, j), rig*D1_rig/(mesh_length_x**2)))
 
-                temp += val_up*D1_top/(mesh_length_y**2)
-                temp += D1_bot/(mesh_length_y**2) if bot != 0 else 0
-                temp += D1_lef/(mesh_length_x**2) if lef != 0 else 0
-                temp += val_rig*D1_rig/(mesh_length_x**2)
-                triple_A.append((idx_A(i, j), idx_A(i, j), temp))
+                tmp += val_up*D1_top/(mesh_length_y**2)
+                tmp += D1_bot/(mesh_length_y**2) if bot != 0 else 0
+                tmp += D1_lef/(mesh_length_x**2) if lef != 0 else 0
+                tmp += val_rig*D1_rig/(mesh_length_x**2)
+                triple_A.append((idx_A(i, j), idx_A(i, j), tmp))
 
-                # 2) 设置phi2
-                temp = 0
+                # 设置phi2
+                tmp = 0
                 top, bot, lef, rig = -1, -1, -1, -1
                 val_up, val_rig = 1, 1
                 d = D2[idx_A(i, j)] * ext_dist
@@ -251,11 +249,11 @@ def gen_laplacian():
                 if lef != 0: triple_A.append((idx_B(i, j), idx_B(i-1, j), lef*D2_lef/(mesh_length_x**2)))
                 if rig != 0: triple_A.append((idx_B(i, j), idx_B(i+1, j), rig*D2_rig/(mesh_length_x**2)))
 
-                temp += val_up*D2_top/(mesh_length_y**2)
-                temp += D2_bot/(mesh_length_y**2) if bot != 0 else 0
-                temp += D2_lef/(mesh_length_x**2) if lef != 0 else 0
-                temp += val_rig*D2_rig/(mesh_length_x**2)
-                triple_A.append((idx_B(i, j), idx_B(i, j), temp))
+                tmp += val_up*D2_top/(mesh_length_y**2)
+                tmp += D2_bot/(mesh_length_y**2) if bot != 0 else 0
+                tmp += D2_lef/(mesh_length_x**2) if lef != 0 else 0
+                tmp += val_rig*D2_rig/(mesh_length_x**2)
+                triple_A.append((idx_B(i, j), idx_B(i, j), tmp))
         return triple_A
 
     triple_A = gen_sub()
@@ -302,7 +300,7 @@ def step(phi_, keff_):
     nxt_phi, _ = gmres(A, B*phi_/keff_)
     keff_ = keff_ * np.sum(B*nxt_phi) / (np.sum(B*phi_))
     return nxt_phi, keff_
-for i_ in range(100):
+for i_ in range(50):
     phi, keff = step(phi, keff)
     keff_his.append(keff)
     print(f"iter {i_}, {keff=:.5f}")
@@ -313,8 +311,8 @@ keff_his = np.array(keff_his)
 np.save(f'{predir}/keff.npy', keff_his)
 
 ###### PART III 做图 ######
-
-xarr = [0, 10, 70, 90, 130, 150, 170]
+# xarr = [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 160, 170]
+xarr = [i*10 for i in range(18)]
 yarr = xarr
 def plot_phi(phi_):
     '''画出 phi 的图像'''
@@ -324,23 +322,23 @@ def plot_phi(phi_):
     phi1 = phi1.reshape(mesh_num_y, mesh_num_x)
     phi2 = phi2.reshape(mesh_num_y, mesh_num_x)
     phi1max = np.max(np.abs(phi1))
-    im = ax[0].imshow(phi1, cmap='jet', vmin=0, vmax=phi1max, origin='lower',
+    im = ax[0].imshow(phi1, cmap='coolwarm', vmin=0, vmax=phi1max, origin='lower',
                       extent=(0, length_x, 0, length_y))
     fig.colorbar(im, ax=ax[0], orientation='vertical', fraction=0.046, pad=0.04)
-    ax[0].set_title("$\\phi_1$")
-    ax[0].grid(True, which='both', linestyle='--', linewidth=1, color='white')
+    ax[0].set_title("$\\phi_1$ Neutron Flux")
+    ax[0].grid(True, which='both', linestyle='--', linewidth=0.5, color='white')
     ax[0].set_xticks(xarr)
     ax[0].set_yticks(yarr)
     phi2max = np.max(np.abs(phi2))
-    im = ax[1].imshow(phi2, cmap='jet', vmin=0, vmax=phi2max,
+    im = ax[1].imshow(phi2, cmap='coolwarm', vmin=0, vmax=phi2max,
                       extent=(0, length_x, 0, length_y), origin='lower')
     fig.colorbar(im, ax=ax[1], orientation='vertical', fraction=0.046, pad=0.04)
-    ax[1].set_title("$\\phi_2$")
-    ax[1].grid(True, which='both', linestyle='--', linewidth=1, color='white')
+    ax[1].set_title("$\\phi_2$ Neutron Flux")
+    ax[1].grid(True, which='both', linestyle='--', linewidth=0.5, color='white')
     ax[1].set_xticks(xarr)
     ax[1].set_yticks(yarr)
     plt.tight_layout()
-    plt.savefig(f'{predir}/phi.png')
+    plt.savefig(f'{predir}/phi.pdf')
     plt.close()
 plot_phi(phi)
 
@@ -351,15 +349,17 @@ def plot_keff():
     ax[0].plot([0, len(keff_his)], [keff_ref, keff_ref], 'r--', label="$k_{eff,ref}=$"f'{keff_ref}')
     ax[0].set_xlabel('Iteration')
     ax[0].set_ylabel('keff')
+    ax[0].set_title('Effective Multiplication Factor')
     ax[0].grid(True, which='both', linestyle='--', linewidth=0.5)
     ax[0].legend()
-    ax[1].plot(np.abs(keff_his-keff_ref)/keff_ref)
+    ax[1].plot(np.abs(keff_his-keff_ref)/keff_ref, label='Relative error')
     ax[1].set_xlabel('Iteration')
     ax[1].set_ylabel('Relative error of keff')
     ax[1].set_yscale('log')
+    ax[1].set_title('Relative Error of Effective Multiplication Factor')
     ax[1].grid(True, which='both', linestyle='--', linewidth=0.5)
     plt.tight_layout()
-    plt.savefig(f'{predir}/keff.png')
+    plt.savefig(f'{predir}/keff.pdf')
     plt.close()
 
 plot_keff()
