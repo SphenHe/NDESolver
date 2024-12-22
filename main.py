@@ -136,14 +136,6 @@ def mat_B(phi_):
     res[:mesh_num_x*mesh_num_y] = nf1*phi_[:mesh_num_x*mesh_num_y]+nf2*phi_[mesh_num_x*mesh_num_y:]
     return res
 
-def step(phi_, keff_):
-    '''执行一步源迭代，更新中子通量和有效增殖因子'''
-    nxt_phi, info = tfqmr(A, B*phi_/keff_)
-    if info != 0:
-        raise RuntimeError(f"TFQMR did not converge, info={info}")
-    keff_ = keff_ * np.sum(B*nxt_phi) / (np.sum(B*phi_))
-    return nxt_phi, keff_
-
 def gen_laplacian():
     '''
     生成拉普拉斯矩阵。
@@ -335,21 +327,12 @@ for i_ in range(mesh_num_x):
         a1[idx] += D1[idx]*Bz2
         a2[idx] += D2[idx]*Bz2
 
-#### PART II b 生成矩阵 ####
+#### PART II b 源迭代 ####
 
 lap = gen_laplacian()
 
-#### PART II c 线性算子 ####
-
-# -D1Δu + (∑a1+∑1→2) u = λ (ν∑f1u + ν∑f2v)
-# -D2Δv + (∑a2) v = ∑1→2 u
-
-# linearoperator
-
 A = LinearOperator((mesh_num_x*mesh_num_y*2, mesh_num_x*mesh_num_y*2), mat_A)
 B = LinearOperator((mesh_num_x*mesh_num_y*2, mesh_num_x*mesh_num_y*2), mat_B)
-
-#### PART II d 源迭代 ####
 
 phi = np.ones(mesh_num_x*mesh_num_y*2)
 phi /= np.sqrt(np.sum(phi**2))
@@ -357,14 +340,16 @@ keff = 1
 keff_data = []
 
 for i_ in range(50):
-    phi, keff = step(phi, keff)
+    nxt_phi, info = tfqmr(A, B*phi/keff)
+    if info != 0:
+        raise RuntimeError(f"TFQMR did not converge, info={info}")
+    keff = keff * np.sum(B*nxt_phi) / (np.sum(B*phi))
+    phi = nxt_phi
     keff_data.append(keff)
-    print(f"iter {i_}, {keff=:.5f}")
-print(f"finish: {keff=:.5f}")
+    print(f"circle {i_}, {keff=:.6f}")
+print(f"final: {keff=:.6f}")
 
-np.save(f'{predir}/phi.data', phi)
 keff_data = np.array(keff_data)
-np.save(f'{predir}/keff.data', keff_data)
 
 ###### PART III 做图 ######
 plot_phi(phi)
