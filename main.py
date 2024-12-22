@@ -59,7 +59,7 @@ import numpy as np
 import numba
 import matplotlib.pyplot as plt
 from scipy.sparse.linalg import LinearOperator
-from scipy.sparse.linalg import gmres
+from scipy.sparse.linalg import tfqmr
 from scipy.sparse import csr_matrix
 
 ###### PART I 读取参数 ######
@@ -297,7 +297,9 @@ keff_his = []
 
 def step(phi_, keff_):
     '''执行一步源迭代，更新中子通量和有效增殖因子'''
-    nxt_phi, _ = gmres(A, B*phi_/keff_)
+    nxt_phi, info = tfqmr(A, B*phi_/keff_)
+    if info != 0:
+        raise RuntimeError(f"TFQMR did not converge, info={info}")
     keff_ = keff_ * np.sum(B*nxt_phi) / (np.sum(B*phi_))
     return nxt_phi, keff_
 for i_ in range(50):
