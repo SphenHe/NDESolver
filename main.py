@@ -11,17 +11,16 @@
 3. 做图：绘制中子通量和有效增殖因子的图像，并保存结果。
 
 主要函数和类：
-- in_rect(x_, y_, x_start, y_start, x_length, y_length): 判断是否位于反应堆内。
 - outside(x_, y_): 判断是否在矩形区域外或者在矩形区域内但材料为0。
 - gen_laplacian(): 生成拉普拉斯矩阵的稀疏表示。
 - mat_A(phi_): 计算矩阵 A 乘以向量 phi_ 的结果。
 - mat_B(phi_): 计算矩阵 B 乘以向量 phi_ 的结果。
-- step(phi_, keff_): 执行一步源迭代，更新中子通量和有效增殖因子。
+- circle(phi_, keff_): 执行一步源迭代，更新中子通量和有效增殖因子。
 - plot_phi(phi_): 绘制中子通量的图像。
 - plot_keff(): 绘制有效增殖因子的图像。
 
 变量：
-- refine: 网格细化倍数。
+- mesh: 网格细化倍数。
 - config: 配置文件路径。
 - predir: 结果保存目录。
 - length_x, length_y: 几何尺寸。
@@ -56,7 +55,6 @@ import os
 import argparse
 import tomli
 import numpy as np
-import numba
 import matplotlib.pyplot as plt
 from scipy.sparse.linalg import LinearOperator
 from scipy.sparse.linalg import tfqmr
@@ -65,9 +63,9 @@ from scipy.sparse import csr_matrix
 def plot_phi(phi_):
     '''画出 phi 的图像'''
     # xarr = [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 160, 170]
-    xarr = [i*10 for i in range(18)]
+    xarr = [i*10 for i in range(geo_num_x+1)]
     yarr = xarr
-    fig, ax = plt.subplots(1, 2, figsize=(12, 6))
+    fig, ax = plt.subplots(1, 2, figsize=(14, 7))
     phi1 = phi_[:mesh_num_x*mesh_num_y]
     phi2 = phi_[mesh_num_x*mesh_num_y:]
     phi1 = phi1.reshape(mesh_num_y, mesh_num_x)
@@ -94,7 +92,7 @@ def plot_phi(phi_):
 
 def plot_keff():
     '''画出 keff 的图像'''
-    _fig, ax = plt.subplots(1, 2, figsize=(12, 6))
+    _fig, ax = plt.subplots(1, 2, figsize=(10, 5))
     ax[0].plot(keff_data, label='$k_{eff}$='+f"{keff_data[-1]:.6f}")
     ax[0].plot([0, len(keff_data)], [keff_ref, keff_ref], 'r--', label="$k_{eff,ref}=$"f'{keff_ref}')
     ax[0].plot([0, len(keff_data)], [keff, keff], 'g--', label="$k_{eff,final}$="f'{keff:.6f}')
@@ -113,15 +111,9 @@ def plot_keff():
     plt.savefig(f'{predir}/keff.pdf')
     plt.close()
 
-@numba.jit(nopython=True)
-def in_rect(x_, y_, x_start, y_start, x_length, y_length):
-    '''判断是否位于反应堆内'''
-    return x_start <= x_ <= x_start+x_length and y_start <= y_ <= y_start+y_length
-
-@numba.jit(nopython=True)
 def outside(x_, y_):
     '''未在矩形区域内或者在矩形区域内但材料为0'''
-    return (not in_rect(x_, y_, 0, 0, length_x, length_y)) \
+    return (not 0 < x_ < length_x or not 0 < y_ < length_y ) \
         or (content[int(x_//geo_length_x), int(y_//geo_length_y)] == 0)
 
 def mat_A(phi_):
@@ -146,7 +138,7 @@ def gen_laplacian():
     返回:
         scipy.sparse.csr_matrix: 生成的拉普拉斯矩阵，采用压缩稀疏行(CSR)格式。
     '''
-    @numba.jit(nopython=True)
+    # @numba.jit(nopython=True)
     def idx_A(i, j):
         '''
         计算二维网格在一维数组表示中的索引。
@@ -159,7 +151,7 @@ def gen_laplacian():
             int: 对应于二维网格中 (i, j) 位置的一维数组中的索引。
         '''
         return i+j*mesh_num_x
-    @numba.jit(nopython=True)
+    # @numba.jit(nopython=True)
     def idx_B(i, j):
         '''
         计算给定索引 i 和 j 的索引 B。
@@ -172,7 +164,7 @@ def gen_laplacian():
             int: 计算得到的索引 B。
         '''
         return idx_A(i, j)+mesh_num_x*mesh_num_y
-    @numba.jit(nopython=True)
+    # @numba.jit(nopython=True)
     def gen_sub():
         '''
         生成一个满的拉普拉斯矩阵(-DΔ(u,v))，以三元组列表的形式返回。
@@ -183,19 +175,19 @@ def gen_laplacian():
             list of tuple: 表示拉普拉斯矩阵非零条目的三元组列表。
                    每个三元组的形式为 (行索引, 列索引, 值)。
         '''
-        triple_A = []
+        laplacian = []
         for i in range(mesh_num_x):
             for j in range(mesh_num_y):
                 if outside(x[i], y[j]):
                     # 设置 phi=0
-                    triple_A.append((idx_A(i, j), idx_A(i, j), 1))
-                    triple_A.append((idx_B(i, j), idx_B(i, j), 1))
+                    laplacian.append((idx_A(i, j), idx_A(i, j), 1))
+                    laplacian.append((idx_B(i, j), idx_B(i, j), 1))
                     continue
 
                 # 设置phi1
                 tmp = 0
-                top, bot, lef, rig  = -1, -1, -1, -1
-                val_up, val_rig = 1, 1
+                top, bottom, left, right  = -1, -1, -1, -1
+                value_up, value_right = 1, 1
                 d = D1[idx_A(i, j)] * ext_dist
 
                 D1_top = 2/(1/D1[idx_A(i, j)] + 1/D1[idx_A(i, j+1)]
@@ -208,59 +200,59 @@ def gen_laplacian():
                             ) if not outside(x[i]+mesh_length_x, y[j]) else D1[idx_A(i, j)]
 
                 # ∂n=0
-                if i==0: lef = 0
-                if j==0: bot = 0
+                if i==0: left = 0
+                if j==0: bottom = 0
                 # phi=0
-                if outside(x[i]+mesh_length_x, y[j]): rig = 0; val_rig = mesh_length_x/(mesh_length_x/2+d)
-                if outside(x[i], y[j]+mesh_length_y): top = 0; val_up = mesh_length_y/(mesh_length_y/2+d)
+                if outside(x[i]+mesh_length_x, y[j]): right = 0; value_right = mesh_length_x/(mesh_length_x/2+d)
+                if outside(x[i], y[j]+mesh_length_y): top = 0; value_up = mesh_length_y/(mesh_length_y/2+d)
                 # update triple
-                if top != 0: triple_A.append((idx_A(i, j), idx_A(i, j+1), top*D1_top/(mesh_length_y**2)))
-                if bot != 0: triple_A.append((idx_A(i, j), idx_A(i, j-1), bot*D1_bot/(mesh_length_y**2)))
-                if lef != 0: triple_A.append((idx_A(i, j), idx_A(i-1, j), lef*D1_lef/(mesh_length_x**2)))
-                if rig != 0: triple_A.append((idx_A(i, j), idx_A(i+1, j), rig*D1_rig/(mesh_length_x**2)))
+                if top != 0: laplacian.append((idx_A(i, j), idx_A(i, j+1), top*D1_top/(mesh_length_y**2)))
+                if bottom != 0: laplacian.append((idx_A(i, j), idx_A(i, j-1), bottom*D1_bot/(mesh_length_y**2)))
+                if left != 0: laplacian.append((idx_A(i, j), idx_A(i-1, j), left*D1_lef/(mesh_length_x**2)))
+                if right != 0: laplacian.append((idx_A(i, j), idx_A(i+1, j), right*D1_rig/(mesh_length_x**2)))
 
-                tmp += val_up*D1_top/(mesh_length_y**2)
-                tmp += D1_bot/(mesh_length_y**2) if bot != 0 else 0
-                tmp += D1_lef/(mesh_length_x**2) if lef != 0 else 0
-                tmp += val_rig*D1_rig/(mesh_length_x**2)
-                triple_A.append((idx_A(i, j), idx_A(i, j), tmp))
+                tmp += value_up*D1_top/(mesh_length_y**2)
+                tmp += D1_bot/(mesh_length_y**2) if bottom != 0 else 0
+                tmp += D1_lef/(mesh_length_x**2) if left != 0 else 0
+                tmp += value_right*D1_rig/(mesh_length_x**2)
+                laplacian.append((idx_A(i, j), idx_A(i, j), tmp))
 
                 # 设置phi2
                 tmp = 0
-                top, bot, lef, rig = -1, -1, -1, -1
-                val_up, val_rig = 1, 1
+                top, bottom, left, right = -1, -1, -1, -1
+                value_up, value_right = 1, 1
                 d = D2[idx_A(i, j)] * ext_dist
 
                 D2_top = 2/(1/D2[idx_A(i, j)] + 1/D2[idx_A(i, j+1)]
                             ) if not outside(x[i], y[j]+mesh_length_y) else D2[idx_A(i, j)]
-                D2_bot = 2/(1/D2[idx_A(i, j)] + 1/D2[idx_A(i, j-1)]
+                D2_bottom = 2/(1/D2[idx_A(i, j)] + 1/D2[idx_A(i, j-1)]
                             ) if not outside(x[i], y[j]-mesh_length_y) else D2[idx_A(i, j)]
-                D2_lef = 2/(1/D2[idx_A(i, j)] + 1/D2[idx_A(i-1, j)]
+                D2_left = 2/(1/D2[idx_A(i, j)] + 1/D2[idx_A(i-1, j)]
                             ) if not outside(x[i]-mesh_length_x, y[j]) else D2[idx_A(i, j)]
-                D2_rig = 2/(1/D2[idx_A(i, j)] + 1/D2[idx_A(i+1, j)]
+                D2_right = 2/(1/D2[idx_A(i, j)] + 1/D2[idx_A(i+1, j)]
                             ) if not outside(x[i]+mesh_length_x, y[j]) else D2[idx_A(i, j)]
                 # ∂n=0
-                if i==0: lef = 0
-                if j==0: bot = 0
+                if i==0: left = 0
+                if j==0: bottom = 0
                 # phi=0
-                if outside(x[i]+mesh_length_x, y[j]): rig = 0; val_rig = mesh_length_x/(mesh_length_x/2+d)
-                if outside(x[i], y[j]+mesh_length_y): top = 0; val_up = mesh_length_y/(mesh_length_y/2+d)
+                if outside(x[i]+mesh_length_x, y[j]): right = 0; value_right = mesh_length_x/(mesh_length_x/2+d)
+                if outside(x[i], y[j]+mesh_length_y): top = 0; value_up = mesh_length_y/(mesh_length_y/2+d)
                 # update triple
-                if top != 0: triple_A.append((idx_B(i, j), idx_B(i, j+1), top*D2_top/(mesh_length_y**2)))
-                if bot != 0: triple_A.append((idx_B(i, j), idx_B(i, j-1), bot*D2_bot/(mesh_length_y**2)))
-                if lef != 0: triple_A.append((idx_B(i, j), idx_B(i-1, j), lef*D2_lef/(mesh_length_x**2)))
-                if rig != 0: triple_A.append((idx_B(i, j), idx_B(i+1, j), rig*D2_rig/(mesh_length_x**2)))
+                if top != 0: laplacian.append((idx_B(i, j), idx_B(i, j+1), top*D2_top/(mesh_length_y**2)))
+                if bottom != 0: laplacian.append((idx_B(i, j), idx_B(i, j-1), bottom*D2_bottom/(mesh_length_y**2)))
+                if left != 0: laplacian.append((idx_B(i, j), idx_B(i-1, j), left*D2_left/(mesh_length_x**2)))
+                if right != 0: laplacian.append((idx_B(i, j), idx_B(i+1, j), right*D2_right/(mesh_length_x**2)))
 
-                tmp += val_up*D2_top/(mesh_length_y**2)
-                tmp += D2_bot/(mesh_length_y**2) if bot != 0 else 0
-                tmp += D2_lef/(mesh_length_x**2) if lef != 0 else 0
-                tmp += val_rig*D2_rig/(mesh_length_x**2)
-                triple_A.append((idx_B(i, j), idx_B(i, j), tmp))
-        return triple_A
+                tmp += value_up*D2_top/(mesh_length_y**2)
+                tmp += D2_bottom/(mesh_length_y**2) if bottom != 0 else 0
+                tmp += D2_left/(mesh_length_x**2) if left != 0 else 0
+                tmp += value_right*D2_right/(mesh_length_x**2)
+                laplacian.append((idx_B(i, j), idx_B(i, j), tmp))
+        return laplacian
 
-    triple_A = gen_sub()
+    laplacian = gen_sub()
     row, col, val = [], [], []
-    for r, c, v in triple_A:
+    for r, c, v in laplacian:
         row.append(r)
         col.append(c)
         val.append(v)
@@ -269,23 +261,25 @@ def gen_laplacian():
 
 ###### PART I 读取参数 ######
 parser = argparse.ArgumentParser()
-parser.add_argument("--refine", type=int, default=1)
+parser.add_argument("--mesh", type=int, default=1)
 parser.add_argument("--config", type=str, default="config.toml")
+parser.add_argument("--circle", type=int, default=50)
 args = parser.parse_args()
-refine = args.refine
+mesh = args.mesh
 config = args.config
+circle = args.circle
 if not os.path.exists(config):
     raise FileNotFoundError(f"config file {config} not found")
 with open(config, "rb") as f:
     config = tomli.load(f)
 
-predir = f"{config['title']}-{refine}"
+predir = f"{config['title']}-{mesh}"
 os.makedirs(predir, exist_ok=True)
 
 length_x = config["geometry"]["length_x"]
 length_y = config["geometry"]["length_y"]
-mesh_num_x = config["geometry"]["geo_num_x"]*refine
-mesh_num_y = config["geometry"]["geo_num_y"]*refine
+mesh_num_x = config["geometry"]["geo_num_x"]*mesh
+mesh_num_y = config["geometry"]["geo_num_y"]*mesh
 mesh_length_x = length_x/mesh_num_x
 mesh_length_y = length_y/mesh_num_y
 x = np.array(object=[ (i+0.5)*mesh_length_x for i in range(mesh_num_x) ])
@@ -339,7 +333,7 @@ phi /= np.sqrt(np.sum(phi**2))
 keff = 1
 keff_data = []
 
-for i_ in range(50):
+for i_ in range(circle):
     nxt_phi, info = tfqmr(A, B*phi/keff)
     if info != 0:
         raise RuntimeError(f"TFQMR did not converge, info={info}")
