@@ -101,7 +101,7 @@ def plot_keff():
     ax[0].set_title('Effective Multiplication Factor')
     ax[0].grid(True, which='both', linestyle='--', linewidth=0.5)
     ax[0].legend()
-    ax[1].plot(np.abs(keff_data-keff_ref)/keff_ref, label='Relative error')
+    ax[1].plot(np.abs(keff_data-keff_ref)/keff_ref, label='Relative error', color='orange')
     ax[1].set_xlabel('Iteration')
     ax[1].set_ylabel('Relative error of keff')
     ax[1].set_yscale('log')
@@ -187,66 +187,66 @@ def gen_laplacian():
                 # 设置phi1
                 tmp = 0
                 top, bottom, left, right  = -1, -1, -1, -1
-                value_up, value_right = 1, 1
+                val_up, val_right = 1, 1
                 d = D1[idx_A(i, j)] * ext_dist
 
-                D1_top = 2/(1/D1[idx_A(i, j)] + 1/D1[idx_A(i, j+1)]
-                            ) if not outside(x[i], y[j]+mesh_length_y) else D1[idx_A(i, j)]
-                D1_bot = 2/(1/D1[idx_A(i, j)] + 1/D1[idx_A(i, j-1)]
-                            ) if not outside(x[i], y[j]-mesh_length_y) else D1[idx_A(i, j)]
-                D1_lef = 2/(1/D1[idx_A(i, j)] + 1/D1[idx_A(i-1, j)]
-                            ) if not outside(x[i]-mesh_length_x, y[j]) else D1[idx_A(i, j)]
-                D1_rig = 2/(1/D1[idx_A(i, j)] + 1/D1[idx_A(i+1, j)]
-                            ) if not outside(x[i]+mesh_length_x, y[j]) else D1[idx_A(i, j)]
+                D1_top = (D1[idx_A(i, j)] + D1[idx_A(i, j+1)]
+                            )/2 if not outside(x[i], y[j]+mesh_length_y) else D1[idx_A(i, j)]
+                D1_bot = (D1[idx_A(i, j)] + D1[idx_A(i, j-1)]
+                            )/2 if not outside(x[i], y[j]-mesh_length_y) else D1[idx_A(i, j)]
+                D1_lef = (D1[idx_A(i, j)] + D1[idx_A(i-1, j)]
+                            )/2 if not outside(x[i]-mesh_length_x, y[j]) else D1[idx_A(i, j)]
+                D1_rig = (D1[idx_A(i, j)] + D1[idx_A(i+1, j)]
+                            )/2 if not outside(x[i]+mesh_length_x, y[j]) else D1[idx_A(i, j)]
 
                 # ∂n=0
                 if i==0: left = 0
                 if j==0: bottom = 0
                 # phi=0
-                if outside(x[i]+mesh_length_x, y[j]): right = 0; value_right = mesh_length_x/(mesh_length_x/2+d)
-                if outside(x[i], y[j]+mesh_length_y): top = 0; value_up = mesh_length_y/(mesh_length_y/2+d)
+                if outside(x[i]+mesh_length_x, y[j]): right = 0; val_right = mesh_length_x/(mesh_length_x/2+d)
+                if outside(x[i], y[j]+mesh_length_y): top = 0; val_up = mesh_length_y/(mesh_length_y/2+d)
                 # update triple
                 if top != 0: laplacian.append((idx_A(i, j), idx_A(i, j+1), top*D1_top/(mesh_length_y**2)))
                 if bottom != 0: laplacian.append((idx_A(i, j), idx_A(i, j-1), bottom*D1_bot/(mesh_length_y**2)))
                 if left != 0: laplacian.append((idx_A(i, j), idx_A(i-1, j), left*D1_lef/(mesh_length_x**2)))
                 if right != 0: laplacian.append((idx_A(i, j), idx_A(i+1, j), right*D1_rig/(mesh_length_x**2)))
 
-                tmp += value_up*D1_top/(mesh_length_y**2)
+                tmp += val_up*D1_top/(mesh_length_y**2)
                 tmp += D1_bot/(mesh_length_y**2) if bottom != 0 else 0
                 tmp += D1_lef/(mesh_length_x**2) if left != 0 else 0
-                tmp += value_right*D1_rig/(mesh_length_x**2)
+                tmp += val_right*D1_rig/(mesh_length_x**2)
                 laplacian.append((idx_A(i, j), idx_A(i, j), tmp))
 
                 # 设置phi2
                 tmp = 0
                 top, bottom, left, right = -1, -1, -1, -1
-                value_up, value_right = 1, 1
+                val_up, val_right = 1, 1
                 d = D2[idx_A(i, j)] * ext_dist
 
-                D2_top = 2/(1/D2[idx_A(i, j)] + 1/D2[idx_A(i, j+1)]
-                            ) if not outside(x[i], y[j]+mesh_length_y) else D2[idx_A(i, j)]
-                D2_bottom = 2/(1/D2[idx_A(i, j)] + 1/D2[idx_A(i, j-1)]
-                            ) if not outside(x[i], y[j]-mesh_length_y) else D2[idx_A(i, j)]
-                D2_left = 2/(1/D2[idx_A(i, j)] + 1/D2[idx_A(i-1, j)]
-                            ) if not outside(x[i]-mesh_length_x, y[j]) else D2[idx_A(i, j)]
-                D2_right = 2/(1/D2[idx_A(i, j)] + 1/D2[idx_A(i+1, j)]
-                            ) if not outside(x[i]+mesh_length_x, y[j]) else D2[idx_A(i, j)]
+                D2_top = (D2[idx_A(i, j)] + D2[idx_A(i, j+1)]
+                            )/2 if not outside(x[i], y[j]+mesh_length_y) else D2[idx_A(i, j)]
+                D2_bottom = (D2[idx_A(i, j)] + D2[idx_A(i, j-1)]
+                            )/2 if not outside(x[i], y[j]-mesh_length_y) else D2[idx_A(i, j)]
+                D2_left = (D2[idx_A(i, j)] + D2[idx_A(i-1, j)]
+                            )/2 if not outside(x[i]-mesh_length_x, y[j]) else D2[idx_A(i, j)]
+                D2_right = (D2[idx_A(i, j)] + D2[idx_A(i+1, j)]
+                            )/2 if not outside(x[i]+mesh_length_x, y[j]) else D2[idx_A(i, j)]
                 # ∂n=0
                 if i==0: left = 0
                 if j==0: bottom = 0
                 # phi=0
-                if outside(x[i]+mesh_length_x, y[j]): right = 0; value_right = mesh_length_x/(mesh_length_x/2+d)
-                if outside(x[i], y[j]+mesh_length_y): top = 0; value_up = mesh_length_y/(mesh_length_y/2+d)
+                if outside(x[i]+mesh_length_x, y[j]): right = 0; val_right = mesh_length_x/(mesh_length_x/2+d)
+                if outside(x[i], y[j]+mesh_length_y): top = 0; val_up = mesh_length_y/(mesh_length_y/2+d)
                 # update triple
                 if top != 0: laplacian.append((idx_B(i, j), idx_B(i, j+1), top*D2_top/(mesh_length_y**2)))
                 if bottom != 0: laplacian.append((idx_B(i, j), idx_B(i, j-1), bottom*D2_bottom/(mesh_length_y**2)))
                 if left != 0: laplacian.append((idx_B(i, j), idx_B(i-1, j), left*D2_left/(mesh_length_x**2)))
                 if right != 0: laplacian.append((idx_B(i, j), idx_B(i+1, j), right*D2_right/(mesh_length_x**2)))
 
-                tmp += value_up*D2_top/(mesh_length_y**2)
+                tmp += val_up*D2_top/(mesh_length_y**2)
                 tmp += D2_bottom/(mesh_length_y**2) if bottom != 0 else 0
                 tmp += D2_left/(mesh_length_x**2) if left != 0 else 0
-                tmp += value_right*D2_right/(mesh_length_x**2)
+                tmp += val_right*D2_right/(mesh_length_x**2)
                 laplacian.append((idx_B(i, j), idx_B(i, j), tmp))
         return laplacian
 
