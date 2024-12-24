@@ -190,14 +190,14 @@ def gen_laplacian():
                 val_up, val_right = 1, 1
                 d = D1[idx_A(i, j)] * ext_dist
 
-                D1_top = 2/(1/D1[idx_A(i, j)] + 1/D1[idx_A(i, j+1)]
-                            ) if not outside(x[i], y[j]+mesh_length_y) else D1[idx_A(i, j)]
-                D1_bot = 2/(1/D1[idx_A(i, j)] + 1/D1[idx_A(i, j-1)]
-                            ) if not outside(x[i], y[j]-mesh_length_y) else D1[idx_A(i, j)]
-                D1_lef = 2/(1/D1[idx_A(i, j)] + 1/D1[idx_A(i-1, j)]
-                            ) if not outside(x[i]-mesh_length_x, y[j]) else D1[idx_A(i, j)]
-                D1_rig = 2/(1/D1[idx_A(i, j)] + 1/D1[idx_A(i+1, j)]
-                            ) if not outside(x[i]+mesh_length_x, y[j]) else D1[idx_A(i, j)]
+                D1_top = (D1[idx_A(i, j)] + D1[idx_A(i, j+1)]
+                            )/2 if not outside(x[i], y[j]+mesh_length_y) else D1[idx_A(i, j)]
+                D1_bot = (D1[idx_A(i, j)] + D1[idx_A(i, j-1)]
+                            )/2 if not outside(x[i], y[j]-mesh_length_y) else D1[idx_A(i, j)]
+                D1_lef = (D1[idx_A(i, j)] + D1[idx_A(i-1, j)]
+                            )/2 if not outside(x[i]-mesh_length_x, y[j]) else D1[idx_A(i, j)]
+                D1_rig = (D1[idx_A(i, j)] + D1[idx_A(i+1, j)]
+                            )/2 if not outside(x[i]+mesh_length_x, y[j]) else D1[idx_A(i, j)]
 
                 # ∂n=0
                 if i==0: left = 0
